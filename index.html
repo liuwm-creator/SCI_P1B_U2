@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>可愛天秤比一比：輕重小偵探</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans TC 繁體中文圓潤清晰字體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: linear-gradient(180deg, #E0F2FE 0%, #FEF9C3 55%, #FDE68A 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* 教室背景黑板與木桌質感 */
+    .wood-desk {
+      background: linear-gradient(180deg, #D97706 0%, #B45309 18%, #92400E 100%);
+      box-shadow: 0 -6px 20px rgba(146, 64, 14, 0.25);
+    }
+
+    /* 天秤物理平滑過渡動畫 */
+    .scale-beam-group {
+      transition: transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: 300px 135px;
+    }
+
+    /* 秤盤保持水平垂掛的反向旋轉過渡 */
+    .scale-pan-group {
+      transition: transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 物品懸浮與點擊彈跳效果 */
+    .item-card {
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+    }
+    .item-card:hover {
+      transform: translateY(-4px) scale(1.03);
+    }
+    .item-card:active {
+      transform: scale(0.95);
+    }
+
+    /* 拖曳放置區高亮 */
+    .drop-zone-active {
+      filter: drop-shadow(0 0 14px rgba(250, 204, 21, 0.95));
+      transform: scale(1.04);
+    }
+
+    /* 慶祝星星彈跳動畫 */
+    @keyframes popBounce {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popBounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    /* 彩帶飄落動畫 */
+    @keyframes confettiFall {
+      0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+    .confetti-piece {
+      position: fixed;
+      top: -10px;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 9999;
+      animation: confettiFall 2.4s ease-out forwards;
+    }
+
+    /* 排序卡片樣式 */
+    .sort-slot {
+      transition: all 0.25s ease;
+    }
+  </style>
+</head>
+<body class="flex flex-col justify-between text-slate-800">
+
+  <!-- 頂部導覽列：標題、口訣提示、星星計分與音效開關 -->
+  <header class="w-full bg-white/90 backdrop-blur-md shadow-md border-b-4 border-sky-300 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-3 py-2.5 sm:px-6 flex flex-wrap items-center justify-between gap-2">
+      <!-- 遊戲標題 -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-11 h-11 rounded-2xl bg-amber-400 flex items-center justify-center text-2xl shadow-inner border-2 border-amber-500">
+          ⚖️
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-2xl font-black text-sky-900 tracking-wide leading-tight">
+            可愛天秤比一比
+          </h1>
+          <p class="text-xs sm:text-sm font-bold text-amber-700">
+            💡 口訣：<span class="text-rose-600">重</span>的一邊往下沉，<span class="text-emerald-600">輕</span>的一邊往上翹！
+          </p>
+        </div>
+      </div>
+
+      <!-- 模式切換分頁 + 星星分數 + 聲音控制 -->
+      <div class="flex items-center gap-2 sm:gap-3 ml-auto sm:ml-0">
+        <!-- 分頁切換按鈕 -->
+        <div class="bg-sky-100 p-1 rounded-2xl flex gap-1 border-2 border-sky-200">
+          <button id="tab-explore" onclick="switchMode('explore')"
+            class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all bg-sky-500 text-white shadow">
+            🔬 自由實驗室
+          </button>
+          <button id="tab-challenge" onclick="switchMode('challenge')"
+            class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all text-sky-800 hover:bg-sky-200">
+            🏆 闖關挑戰
+          </button>
+        </div>
+
+        <!-- 星星得分 -->
+        <div class="flex items-center gap-1.5 bg-amber-100 border-2 border-amber-300 px-3 py-1.5 rounded-2xl shadow-sm">
+          <span class="text-xl">⭐</span>
+          <span id="star-count" class="font-black text-lg sm:text-xl text-amber-800">0</span>
+        </div>
+
+        <!-- 音效開關 -->
+        <button id="btn-sound" onclick="toggleSound()" title="開關音效"
+          class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-100 hover:bg-emerald-200 border-2 border-emerald-300 flex items-center justify-center text-xl shadow-sm transition">
+          🔊
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主遊戲區 -->
+  <main class="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 pt-3 pb-2 flex flex-col items-center justify-between gap-3">
+
+    <!-- 狀態 / 題目提示橫幅 -->
+    <section id="status-banner" class="w-full bg-white rounded-3xl p-3.5 sm:p-4 shadow-lg border-4 border-sky-300 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-3 text-center sm:text-left">
+        <div id="mascot-icon" class="text-4xl sm:text-5xl flex-shrink-0">🦉</div>
+        <div>
+          <div id="banner-badge" class="inline-block px-2.5 py-0.5 rounded-full text-xs font-black bg-sky-100 text-sky-700 mb-1">
+            自由探索模式
+          </div>
+          <h2 id="banner-title" class="text-lg sm:text-2xl font-black text-slate-800 leading-snug">
+            把物品放到左邊或右邊的天秤上，看看哪一邊比較重！
+          </h2>
+          <p id="banner-subtitle" class="text-sm sm:text-base font-bold text-slate-500 mt-0.5">
+            提示：你可以點擊下方的物品，或直接把物品「拖曳」到秤盤上喔！
+          </p>
+        </div>
+      </div>
+
+      <!-- 右側操作按鈕（自由模式顯示清空按鈕；闖關模式顯示關卡進度） -->
+      <div id="banner-actions" class="flex items-center gap-2 flex-shrink-0">
+        <button onclick="clearScale()"
+          class="px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-base shadow-md border-b-4 border-rose-700 transition flex items-center gap-1.5">
+          <span>🔄</span> 清空天秤
+        </button>
+      </div>
+    </section>
+
+    <!-- 中央大型卡通天秤舞台 -->
+    <section class="relative w-full flex flex-col items-center justify-center my-1">
+      <!-- 左右狀態標籤（顯示「重／下沉」或「輕／上升」） -->
+      <div class="w-full max-w-2xl flex justify-between px-4 sm:px-10 mb-1 pointer-events-none">
+        <div id="left-status-pill" class="px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-white/90 text-slate-600 border-2 border-slate-200 shadow-sm transition-all">
+          左盤：空空的
+        </div>
+        <div id="right-status-pill" class="px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-white/90 text-slate-600 border-2 border-slate-200 shadow-sm transition-all">
+          右盤：空空的
+        </div>
+      </div>
+
+      <!-- SVG 天秤畫布 -->
+      <div class="relative w-full max-w-2xl aspect-[16/9] sm:aspect-[18/9] max-h-[340px] flex items-center justify-center">
+        <svg id="scale-svg" viewBox="0 0 600 320" class="w-full h-full overflow-visible drop-shadow-md">
+          <defs>
+            <!-- 金屬與木頭漸層 -->
+            <linearGradient id="pillarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#F59E0B" />
+              <stop offset="50%" stop-color="#FBBF24" />
+              <stop offset="100%" stop-color="#D97706" />
+            </linearGradient>
+            <linearGradient id="baseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#38BDF8" />
+              <stop offset="100%" stop-color="#0284C7" />
+            </linearGradient>
+            <linearGradient id="beamGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#FB7185" />
+              <stop offset="100%" stop-color="#E11D48" />
+            </linearGradient>
+            <linearGradient id="panGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#FEF08A" />
+              <stop offset="100%" stop-color="#F59E0B" />
+            </linearGradient>
+          </defs>
+
+          <!-- 天秤底座 -->
+          <rect x="195" y="278" width="210" height="26" rx="13" fill="url(#baseGrad)" stroke="#0369A1" stroke-width="3" />
+          <rect x="225" y="262" width="150" height="20" rx="10" fill="#7DD3FC" stroke="#0284C7" stroke-width="3" />
+
+          <!-- 天秤中央立柱 -->
+          <rect x="286" y="115" width="28" height="150" rx="10" fill="url(#pillarGrad)" stroke="#B45309" stroke-width="3" />
+          <!-- 裝飾刻度指針框 -->
+          <path d="M 275 180 L 325 180 L 315 215 L 285 215 Z" fill="#FFFBEB" stroke="#D97706" stroke-width="3" />
+          <line x1="300" y1="184" x2="300" y2="210" stroke="#EF4444" stroke-width="3" stroke-linecap="round" />
+
+          <!-- 會隨重量傾斜的橫樑群組 (旋轉中心 300, 135) -->
+          <g id="scale-beam" class="scale-beam-group">
+            <!-- 橫樑主體 -->
+            <rect x="105" y="125" width="390" height="20" rx="10" fill="url(#beamGrad)" stroke="#9F1239" stroke-width="3" />
+            <!-- 左右掛鉤圓環 -->
+            <circle cx="125" cy="135" r="10" fill="#FDE047" stroke="#B45309" stroke-width="3" />
+            <circle cx="475" cy="135" r="10" fill="#FDE047" stroke="#B45309" stroke-width="3" />
+
+            <!-- 左側吊籃群組 (以 125, 135 為支點反向旋轉保持水平) -->
+            <g id="left-pan-rig" class="scale-pan-group" style="transform-origin: 125px 135px;">
+              <!-- 吊繩 -->
+              <line x1="125" y1="135" x2="62" y2="218" stroke="#64748B" stroke-width="3.5" stroke-linecap="round" />
+              <line x1="125" y1="135" x2="188" y2="218" stroke="#64748B" stroke-width="3.5" stroke-linecap="round" />
+              <line x1="125" y1="135" x2="125" y2="218" stroke="#94A3B8" stroke-width="2.5" stroke-dasharray="4 4" />
+
+              <!-- 左秤盤拖曳感應區 -->
+              <rect id="left-drop-rect" x="42" y="135" width="166" height="115" rx="20" fill="transparent" />
+
+              <!-- 秤盤本體 -->
+              <path d="M 48 218 Q 125 248 202 218 L 192 234 Q 125 260 58 234 Z" fill="url(#panGrad)" stroke="#B45309" stroke-width="3" />
+              <ellipse cx="125" cy="218" rx="77" ry="11" fill="#FEF9C3" stroke="#D97706" stroke-width="2.5" />
+
+              <!-- 左盤放置物品的容器 (foreignObject 方便渲染高清 SVG 物品與點擊移除) -->
+              <foreignObject x="40" y="132" width="170" height="88">
+                <div id="left-pan-items" xmlns="http://www.w3.org/1999/xhtml"
+                  class="w-full h-full flex items-end justify-center gap-1 pb-1 px-1 cursor-pointer"
+                  title="點擊盤中物品可放回桌面">
+                </div>
+              </foreignObject>
+            </g>
+
+            <!-- 右側吊籃群組 (以 475, 135 為支點反向旋轉保持水平) -->
+            <g id="right-pan-rig" class="scale-pan-group" style="transform-origin: 475px 135px;">
+              <!-- 吊繩 -->
+              <line x1="475" y1="135" x2="412" y2="218" stroke="#64748B" stroke-width="3.5" stroke-linecap="round" />
+              <line x1="475" y1="135" x2="538" y2="218" stroke="#64748B" stroke-width="3.5" stroke-linecap="round" />
+              <line x1="475" y1="135" x2="475" y2="218" stroke="#94A3B8" stroke-width="2.5" stroke-dasharray="4 4" />
+
+              <!-- 右秤盤拖曳感應區 -->
+              <rect id="right-drop-rect" x="392" y="135" width="166" height="115" rx="20" fill="transparent" />
+
+              <!-- 秤盤本體 -->
+              <path d="M 398 218 Q 475 248 552 218 L 542 234 Q 475 260 408 234 Z" fill="url(#panGrad)" stroke="#B45309" stroke-width="3" />
+              <ellipse cx="475" cy="218" rx="77" ry="11" fill="#FEF9C3" stroke="#D97706" stroke-width="2.5" />
+
+              <!-- 右盤放置物品的容器 -->
+              <foreignObject x="390" y="132" width="170" height="88">
+                <div id="right-pan-items" xmlns="http://www.w3.org/1999/xhtml"
+                  class="w-full h-full flex items-end justify-center gap-1 pb-1 px-1 cursor-pointer"
+                  title="點擊盤中物品可放回桌面">
+                </div>
+              </foreignObject>
+            </g>
+          </g>
+
+          <!-- 中央軸心轉軸蓋與可愛笑臉 -->
+          <circle cx="300" cy="135" r="22" fill="#FDE047" stroke="#B45309" stroke-width="4" />
+          <circle cx="293" cy="131" r="2.8" fill="#78350F" />
+          <circle cx="307" cy="131" r="2.8" fill="#78350F" />
+          <path d="M 293 140 Q 300 147 307 140" fill="none" stroke="#78350F" stroke-width="2.8" stroke-linecap="round" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- 闖關模式專屬：作答互動區（選擇題或排序題） -->
+    <section id="challenge-panel" class="hidden w-full max-w-3xl bg-white/95 rounded-3xl p-4 shadow-xl border-4 border-amber-400">
+      <!-- 關卡指示條 -->
+      <div class="flex items-center justify-between mb-3">
+        <div id="level-dots" class="flex items-center gap-1.5"></div>
+        <span id="level-progress-text" class="text-sm font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+          第 1 / 7 關
+        </span>
+      </div>
+
+      <!-- 動態選項 / 排序作答容器 -->
+      <div id="challenge-options-area" class="w-full"></div>
+
+      <!-- 作答回饋區 -->
+      <div id="challenge-feedback" class="hidden mt-3 p-3 rounded-2xl text-center font-black text-lg"></div>
+    </section>
+
+  </main>
+
+  <!-- 底部木桌物品區（自由實驗室 & 需要自己放物品的關卡顯示） -->
+  <footer id="desk-area" class="wood-desk w-full pt-3 pb-4 px-3 sm:px-6 border-t-4 border-amber-950 z-30">
+    <div class="max-w-5xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5 text-amber-100">
+        <span class="font-black text-sm sm:text-base flex items-center gap-1.5">
+          🎒 實驗桌上的物品（點選「放左邊 / 放右邊」或直接拖曳到秤盤上）：
+        </span>
+        <span id="desk-hint" class="text-xs sm:text-sm font-bold bg-amber-950/50 px-3 py-1 rounded-full text-amber-200">
+          提示：點一下秤盤裡的物品可以拿下來！
+        </span>
+      </div>
+
+      <!-- 物品卡片網格 -->
+      <div id="items-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 sm:gap-3">
+        <!-- 由 JS 動態生成物品卡片 -->
+      </div>
+    </div>
+  </footer>
+
+  <!-- 通關大勝利彈窗 -->
+  <div id="victory-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 text-center border-4 border-amber-400 shadow-2xl animate-pop">
+      <div class="text-6xl mb-2">🏆🎉</div>
+      <h2 class="text-2xl sm:text-3xl font-black text-amber-600 mb-2">太厲害了！全部通關！</h2>
+      <p class="text-slate-700 font-bold text-base sm:text-lg mb-4">
+        你已經學會用天秤比較物品的輕重了！<br/>
+        字典最重、水瓶第二、250ML紙包飲料較輕、膠袋最輕！
+      </p>
+      <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 mb-5">
+        <span class="text-sm font-bold text-amber-800">獲得星星總數</span>
+        <div id="final-stars" class="text-3xl font-black text-amber-500 mt-1">⭐ 7 顆星</div>
+      </div>
+      <div class="flex gap-3 justify-center">
+        <button onclick="restartChallenge()"
+          class="flex-1 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-md border-b-4 border-amber-700">
+          🔁 再玩一次
+        </button>
+        <button onclick="closeVictoryAndExplore()"
+          class="flex-1 py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-black text-lg shadow-md border-b-4 border-sky-700">
+          🔬 自由實驗
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ==========================================
+     * 1. 音效合成器 (Web Audio API，無需外部音檔)
+     * ==========================================
+     */
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('btn-sound');
+      btn.textContent = soundEnabled ? '🔊' : '🔇';
+      btn.className = soundEnabled
+        ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-100 hover:bg-emerald-200 border-2 border-emerald-300 flex items-center justify-center text-xl shadow-sm transition'
+        : 'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-slate-200 hover:bg-slate-300 border-2 border-slate-300 flex items-center justify-center text-xl shadow-sm transition';
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'place') {
+        // 放上物品的清脆木頭/泡泡聲
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(520, now + 0.12);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'remove') {
+        // 拿走物品的下降音效
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(460, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.12);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'tilt') {
+        // 天秤擺動輕微滑音
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.linearRampToValueAtTime(280, now + 0.25);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.005, now + 0.28);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'correct') {
+        // 答對歡快三連音 (C5 - E5 - G5 - C6)
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'triangle';
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          const t = now + idx * 0.09;
+          o.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(0.25, t);
+          g.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+          o.start(t);
+          o.stop(t + 0.26);
+        });
+      } else if (type === 'wrong') {
+        // 溫和提醒再試一次音效
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.linearRampToValueAtTime(210, now + 0.25);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    }
+
+    /**
+     * ==========================================
+     * 2. 物品資料庫與精緻 SVG 插圖定義
+     * ==========================================
+     */
+    const ITEMS = [
+      {
+        id: 'dictionary',
+        name: '字典',
+        weight: 800,
+        desc: '厚厚的字典',
+        isCore: true,
+        badgeColor: 'bg-rose-100 text-rose-700 border-rose-300',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+            <!-- 書本厚度底部 -->
+            <path d="M 18 68 L 76 78 L 88 64 L 88 76 L 76 90 L 18 80 Z" fill="#FDE68A" stroke="#92400E" stroke-width="3" stroke-linejoin="round"/>
+            <!-- 書頁線條 -->
+            <line x1="22" y1="73" x2="75" y2="82" stroke="#D97706" stroke-width="2"/>
+            <line x1="22" y1="77" x2="75" y2="86" stroke="#D97706" stroke-width="2"/>
+            <!-- 紅色硬殼封面 -->
+            <path d="M 18 24 L 32 12 L 88 22 L 76 34 Z" fill="#F43F5E" stroke="#881337" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M 18 24 L 76 34 L 76 78 L 18 68 Z" fill="#E11D48" stroke="#881337" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M 76 34 L 88 22 L 88 64 L 76 78 Z" fill="#FFFBEB" stroke="#92400E" stroke-width="3" stroke-linejoin="round"/>
+            <!-- 封面金色標籤與「字典」字樣 -->
+            <polygon points="30,36 64,42 64,62 30,56" fill="#FEF08A" stroke="#B45309" stroke-width="2"/>
+            <text x="47" y="53" text-anchor="middle" font-size="13" font-weight="900" fill="#991B1B" transform="skewY(9)">字典</text>
+          </svg>
+        `
+      },
+      {
+        id: 'bottle',
+        name: '水瓶',
+        weight: 500,
+        desc: '裝滿水的水瓶',
+        isCore: true,
+        badgeColor: 'bg-sky-100 text-sky-700 border-sky-300',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+            <!-- 瓶蓋 -->
+            <rect x="38" y="10" width="24" height="12" rx="4" fill="#0284C7" stroke="#0C4A6E" stroke-width="3"/>
+            <!-- 瓶頸 -->
+            <rect x="41" y="22" width="18" height="8" fill="#E0F2FE" stroke="#0284C7" stroke-width="2.5"/>
+            <!-- 瓶身外框 -->
+            <rect x="29" y="30" width="42" height="60" rx="12" fill="#E0F2FE" stroke="#0284C7" stroke-width="3"/>
+            <!-- 內部滿滿的藍色清水 -->
+            <path d="M 32 42 Q 50 38 68 42 L 68 78 Q 68 87 59 87 L 41 87 Q 32 87 32 78 Z" fill="#38BDF8"/>
+            <!-- 水波紋與反光 -->
+            <path d="M 34 43 Q 50 47 66 43" fill="none" stroke="#BAE6FD" stroke-width="2.5"/>
+            <rect x="35" y="48" width="5" height="28" rx="2.5" fill="#FFFFFF" opacity="0.65"/>
+            <!-- 水滴圖示 -->
+            <path d="M 50 54 C 50 54 43 63 43 68 A 7 7 0 0 0 57 68 C 57 63 50 54 50 54 Z" fill="#FFFFFF" opacity="0.9"/>
+          </svg>
+        `
+      },
+      {
+        id: 'drinkbox',
+        name: '250ML紙包飲料',
+        weight: 260,
+        desc: '250ML紙包飲料',
+        isCore: true,
+        badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+            <!-- 彎曲吸管 -->
+            <path d="M 48 26 L 48 14 Q 48 9 54 9 L 68 9" fill="none" stroke="#EF4444" stroke-width="4.5" stroke-linecap="round"/>
+            <!-- 紙盒側面立體 -->
+            <polygon points="64,24 76,30 76,86 64,90" fill="#F59E0B" stroke="#78350F" stroke-width="3" stroke-linejoin="round"/>
+            <!-- 紙盒正面 -->
+            <rect x="28" y="24" width="36" height="66" rx="4" fill="#FDE047" stroke="#78350F" stroke-width="3"/>
+            <!-- 檸檬茶 / 飲料圖案 -->
+            <circle cx="46" cy="52" r="11" fill="#FB923C" stroke="#9A3412" stroke-width="2"/>
+            <circle cx="46" cy="52" r="7" fill="#FEF08A"/>
+            <rect x="31" y="68" width="30" height="14" rx="3" fill="#16A34A"/>
+            <text x="46" y="78" text-anchor="middle" font-size="8.5" font-weight="900" fill="#FFFFFF">250ML</text>
+          </svg>
+        `
+      },
+      {
+        id: 'plasticbag',
+        name: '膠袋',
+        weight: 10,
+        desc: '輕飄飄的膠袋',
+        isCore: true,
+        badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-sm">
+            <!-- 半透明白色膠袋主體與雙提手 -->
+            <path d="M 30 16 L 38 16 L 40 36 L 60 36 L 62 16 L 70 16 L 76 42 L 74 82 Q 74 88 66 88 L 34 88 Q 26 88 26 82 L 24 42 Z"
+              fill="#FFFFFF" fill-opacity="0.88" stroke="#64748B" stroke-width="3" stroke-linejoin="round"/>
+            <!-- 膠袋皺褶反光線 -->
+            <path d="M 34 48 Q 42 62 36 78" fill="none" stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M 64 46 Q 58 60 64 76" fill="none" stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round"/>
+            <!-- 可愛微笑標誌 -->
+            <path d="M 43 62 Q 50 68 57 62" fill="none" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        `
+      },
+      {
+        id: 'apple',
+        name: '蘋果',
+        weight: 150,
+        desc: '紅蘋果（輔助物品）',
+        isCore: false,
+        badgeColor: 'bg-red-100 text-red-700 border-red-200',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+            <!-- 果蒂與綠葉 -->
+            <path d="M 50 32 Q 50 18 56 14" fill="none" stroke="#78350F" stroke-width="4" stroke-linecap="round"/>
+            <path d="M 52 22 Q 68 14 72 24 Q 62 30 52 22 Z" fill="#22C55E" stroke="#15803D" stroke-width="2"/>
+            <!-- 蘋果果實 -->
+            <path d="M 50 34 C 36 26 20 36 22 58 C 24 78 38 88 50 84 C 62 88 76 78 78 58 C 80 36 64 26 50 34 Z"
+              fill="#EF4444" stroke="#991B1B" stroke-width="3"/>
+            <!-- 光澤 -->
+            <ellipse cx="34" cy="48" rx="4" ry="9" transform="rotate(-20 34 48)" fill="#FCA5A5" opacity="0.8"/>
+          </svg>
+        `
+      },
+      {
+        id: 'eraser',
+        name: '擦膠',
+        weight: 30,
+        desc: '小橡皮擦（輔助物品）',
+        isCore: false,
+        badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+        svg: `
+          <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+            <!-- 白色橡皮部分 -->
+            <polygon points="24,62 56,28 78,44 46,78" fill="#FFFFFF" stroke="#475569" stroke-width="3" stroke-linejoin="round"/>
+            <polygon points="24,62 46,78 46,88 24,72" fill="#CBD5E1" stroke="#475569" stroke-width="3" stroke-linejoin="round"/>
+            <!-- 藍色紙套 -->
+            <polygon points="36,49 56,28 78,44 58,65" fill="#3B82F6" stroke="#1E3A8A" stroke-width="3" stroke-linejoin="round"/>
+            <polygon points="58,65 78,44 78,54 58,75" fill="#1D4ED8" stroke="#1E3A8A" stroke-width="3" stroke-linejoin="round"/>
+          </svg>
+        `
+      }
+    ];
+
+    function getItemById(id) {
+      return ITEMS.find(item => item.id === id);
+    }
+
+    /**
+     * ==========================================
+     * 3. 遊戲全域狀態與天秤物理計算
+     * ==========================================
+     */
+    let currentMode = 'explore'; // 'explore' | 'challenge'
+    let leftPan = [];  // 存放 item id 陣列
+    let rightPan = []; // 存放 item id 陣列
+    let stars = 0;
+
+    // 闖關模式狀態
+    let currentLevelIdx = 0;
+    let levelSolved = false;
+    let sortSelection = []; // 用於排序題的玩家選擇順序
+
+    /**
+     * 計算左右盤重量並更新天秤傾斜角度與文字提示
+     */
+    function updateScalePhysics(playTiltAudio = true) {
+      const leftWeight = leftPan.reduce((sum, id) => sum + getItemById(id).weight, 0);
+      const rightWeight = rightPan.reduce((sum, id) => sum + getItemById(id).weight, 0);
+
+      // 計算傾斜角度 (-20度 到 +20度，正值代表右邊下沉，負值代表左邊下沉)
+      const diff = rightWeight - leftWeight;
+      let angle = 0;
+      if (diff !== 0) {
+        // 使用平滑曲線映射，即使重量差很小（如 30 vs 10）也能清楚看出傾斜
+        const sign = diff > 0 ? 1 : -1;
+        const absDiff = Math.abs(diff);
+        angle = sign * Math.min(20, 7 + Math.sqrt(absDiff) * 0.48);
+      }
+
+      const beamEl = document.getElementById('scale-beam');
+      const leftPanRig = document.getElementById('left-pan-rig');
+      const rightPanRig = document.getElementById('right-pan-rig');
+
+      beamEl.style.transform = `rotate(${angle}deg)`;
+      // 反向旋轉保持秤盤水平垂掛
+      leftPanRig.style.transform = `rotate(${-angle}deg)`;
+      rightPanRig.style.transform = `rotate(${-angle}deg)`;
+
+      if (playTiltAudio && (leftPan.length > 0 || rightPan.length > 0)) {
+        playSound('tilt');
+      }
+
+      renderPanItems('left');
+      renderPanItems('right');
+      updateStatusLabels(leftWeight, rightWeight);
+    }
+
+    /**
+     * 渲染秤盤上的物品圖示
+     */
+    function renderPanItems(side) {
+      const container = document.getElementById(`${side}-pan-items`);
+      const list = side === 'left' ? leftPan : rightPan;
+      container.innerHTML = '';
+
+      list.forEach((itemId, index) => {
+        const item = getItemById(itemId);
+        const div = document.createElement('div');
+        div.className = 'w-14 h-14 sm:w-16 sm:h-16 flex flex-col items-center justify-end relative group transition-transform hover:scale-110';
+        div.innerHTML = `
+          <div class="w-12 h-12 sm:w-14 sm:h-14">${item.svg}</div>
+          <span class="text-[10px] sm:text-xs font-black bg-white/95 text-slate-800 px-1.5 rounded-full border border-slate-300 shadow-sm -mt-1 whitespace-nowrap">
+            ${item.name}
+          </span>
+        `;
+        // 自由探索模式或允許操作天秤的關卡中，點擊盤上物品可移回桌面
+        div.onclick = (e) => {
+          e.stopPropagation();
+          if (currentMode === 'explore' || LEVELS[currentLevelIdx]?.allowInteractiveScale) {
+            removeFromPan(side, index);
+          }
+        };
+        container.appendChild(div);
+      });
+    }
+
+    /**
+     * 更新天秤上方狀態標籤與自由模式生動解說
+     */
+    function updateStatusLabels(leftWeight, rightWeight) {
+      const leftPill = document.getElementById('left-status-pill');
+      const rightPill = document.getElementById('right-status-pill');
+
+      if (leftPan.length === 0 && rightPan.length === 0) {
+        leftPill.textContent = '左盤：空空的';
+        leftPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-white/90 text-slate-600 border-2 border-slate-200 shadow-sm';
+        rightPill.textContent = '右盤：空空的';
+        rightPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-white/90 text-slate-600 border-2 border-slate-200 shadow-sm';
+      } else if (leftWeight > rightWeight) {
+        leftPill.textContent = '⬇️ 左邊比較重（往下沉）';
+        leftPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-rose-500 text-white border-2 border-rose-600 shadow-md';
+        rightPill.textContent = rightPan.length === 0 ? '⬆️ 右盤：空空的（往上翹）' : '⬆️ 右邊比較輕（往上翹）';
+        rightPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-emerald-500 text-white border-2 border-emerald-600 shadow-md';
+      } else if (rightWeight > leftWeight) {
+        leftPill.textContent = leftPan.length === 0 ? '⬆️ 左盤：空空的（往上翹）' : '⬆️ 左邊比較輕（往上翹）';
+        leftPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-emerald-500 text-white border-2 border-emerald-600 shadow-md';
+        rightPill.textContent = '⬇️ 右邊比較重（往下沉）';
+        rightPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-rose-500 text-white border-2 border-rose-600 shadow-md';
+      } else {
+        leftPill.textContent = '⚖️ 左邊一樣重（保持水平）';
+        leftPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-md';
+        rightPill.textContent = '⚖️ 右邊一樣重（保持水平）';
+        rightPill.className = 'px-3.5 py-1 rounded-full text-sm sm:text-base font-black bg-amber-400 text-amber-950 border-2 border-amber-500 shadow-md';
+      }
+
+      // 若在自由模式，動態更新頂部橫幅解說
+      if (currentMode === 'explore') {
+        const titleEl = document.getElementById('banner-title');
+        const subEl = document.getElementById('banner-subtitle');
+
+        if (leftPan.length === 0 && rightPan.length === 0) {
+          titleEl.textContent = '把物品放到左邊或右邊的天秤上，看看哪一邊比較重！';
+          subEl.textContent = '提示：每邊最多可以放 2 件物品，試試看「字典」和「膠袋」差多少！';
+        } else {
+          const leftNames = leftPan.map(id => getItemById(id).name).join(' + ') || '空盤';
+          const rightNames = rightPan.map(id => getItemById(id).name).join(' + ') || '空盤';
+
+          if (leftWeight > rightWeight) {
+            titleEl.innerHTML = `左邊的【<span class="text-rose-600">${leftNames}</span>】比右邊的【<span class="text-emerald-600">${rightNames}</span>】重！`;
+            subEl.textContent = '因為左邊比較重，所以左邊秤盤沉下去了，右邊翹起來！';
+          } else if (rightWeight > leftWeight) {
+            titleEl.innerHTML = `右邊的【<span class="text-rose-600">${rightNames}</span>】比左邊的【<span class="text-emerald-600">${leftNames}</span>】重！`;
+            subEl.textContent = '因為右邊比較重，所以右邊秤盤沉下去了，左邊翹起來！';
+          } else {
+            titleEl.innerHTML = `兩邊一樣重！天秤保持平平的！`;
+            subEl.textContent = `左邊（${leftNames}）和右邊（${rightNames}）重量相同喔！`;
+          }
+        }
+      }
+    }
+
+    /**
+     * 放置物品到左盤或右盤（每邊上限 2 件保持畫面美觀清晰）
+     */
+    function addToPan(side, itemId) {
+      if (currentMode === 'challenge' && !LEVELS[currentLevelIdx]?.allowInteractiveScale) {
+        return;
+      }
+      const targetPan = side === 'left' ? leftPan : rightPan;
+      if (targetPan.length >= 2) {
+        // 若已滿2件，替換掉最早放的那一件，方便小朋友連續測試
+        targetPan.shift();
+      }
+      targetPan.push(itemId);
+      playSound('place');
+      updateScalePhysics(true);
+    }
+
+    function removeFromPan(side, index) {
+      if (side === 'left') {
+        leftPan.splice(index, 1);
+      } else {
+        rightPan.splice(index, 1);
+      }
+      playSound('remove');
+      updateScalePhysics(true);
+    }
+
+    function clearScale() {
+      leftPan = [];
+      rightPan = [];
+      playSound('remove');
+      updateScalePhysics(false);
+    }
+
+    /**
+     * ==========================================
+     * 4. 渲染底部木桌物品卡與拖曳 (Drag & Drop / Touch)
+     * ==========================================
+     */
+    function renderDeskItems() {
+      const grid = document.getElementById('items-grid');
+      grid.innerHTML = '';
+
+      ITEMS.forEach(item => {
+        const card = document.createElement('div');
+        card.className = `item-card bg-white rounded-2xl p-2.5 shadow-md border-4 ${item.isCore ? 'border-amber-300' : 'border-slate-200'} flex flex-col items-center justify-between cursor-grab active:cursor-grabbing relative`;
+        card.draggable = true;
+
+        // 拖曳事件 (桌面瀏覽器)
+        card.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', item.id);
+        });
+
+        // 觸控拖曳支援 (平板/手機)
+        setupTouchDrag(card, item.id);
+
+        card.innerHTML = `
+          ${item.isCore ? '<span class="absolute -top-2.5 -right-2 bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow border border-amber-500">必學物品</span>' : ''}
+          <div class="w-16 h-16 sm:w-20 sm:h-20 my-0.5 pointer-events-none">
+            ${item.svg}
+          </div>
+          <div class="text-center w-full pointer-events-none">
+            <div class="font-black text-sm sm:text-base text-slate-800 leading-tight">${item.name}</div>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 w-full mt-2">
+            <button type="button" onclick="addToPan('left', '${item.id}')"
+              class="py-1.5 px-1 rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-xs sm:text-sm shadow-sm transition">
+              ⬅️ 放左邊
+            </button>
+            <button type="button" onclick="addToPan('right', '${item.id}')"
+              class="py-1.5 px-1 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs sm:text-sm shadow-sm transition">
+              放右邊 ➡️
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // 設定 SVG 天秤左右兩側為拖曳放置區
+    function setupScaleDropZones() {
+      const svgEl = document.getElementById('scale-svg');
+
+      svgEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const rect = svgEl.getBoundingClientRect();
+        const relX = (e.clientX - rect.left) / rect.width;
+        highlightDropSide(relX < 0.5 ? 'left' : 'right');
+      });
+
+      svgEl.addEventListener('dragleave', () => {
+        highlightDropSide(null);
+      });
+
+      svgEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        highlightDropSide(null);
+        const itemId = e.dataTransfer.getData('text/plain');
+        if (!itemId) return;
+        const rect = svgEl.getBoundingClientRect();
+        const relX = (e.clientX - rect.left) / rect.width;
+        addToPan(relX < 0.5 ? 'left' : 'right', itemId);
+      });
+    }
+
+    function highlightDropSide(side) {
+      const leftRig = document.getElementById('left-pan-rig');
+      const rightRig = document.getElementById('right-pan-rig');
+      leftRig.classList.toggle('drop-zone-active', side === 'left');
+      rightRig.classList.toggle('drop-zone-active', side === 'right');
+    }
+
+    // 手機與平板觸控拖曳浮動圖示實作
+    function setupTouchDrag(element, itemId) {
+      let ghost = null;
+      let isDragging = false;
+      let startX = 0, startY = 0;
+
+      element.addEventListener('touchstart', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isDragging = false;
+      }, { passive: true });
+
+      element.addEventListener('touchmove', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        const touch = e.touches[0];
+        const dx = Math.abs(touch.clientX - startX);
+        const dy = Math.abs(touch.clientY - startY);
+
+        if (!isDragging && (dx > 12 || dy > 12)) {
+          isDragging = true;
+          const item = getItemById(itemId);
+          ghost = document.createElement('div');
+          ghost.className = 'fixed w-20 h-20 pointer-events-none z-50 opacity-90 scale-110';
+          ghost.innerHTML = item.svg;
+          document.body.appendChild(ghost);
+        }
+
+        if (isDragging && ghost) {
+          e.preventDefault();
+          ghost.style.left = `${touch.clientX - 40}px`;
+          ghost.style.top = `${touch.clientY - 40}px`;
+
+          const svgRect = document.getElementById('scale-svg').getBoundingClientRect();
+          if (touch.clientY >= svgRect.top - 30 && touch.clientY <= svgRect.bottom + 30) {
+            const relX = (touch.clientX - svgRect.left) / svgRect.width;
+            highlightDropSide(relX < 0.5 ? 'left' : 'right');
+          } else {
+            highlightDropSide(null);
+          }
+        }
+      }, { passive: false });
+
+      element.addEventListener('touchend', (e) => {
+        if (isDragging && ghost) {
+          const touch = e.changedTouches[0];
+          const svgRect = document.getElementById('scale-svg').getBoundingClientRect();
+          if (touch.clientY >= svgRect.top - 30 && touch.clientY <= svgRect.bottom + 30) {
+            const relX = (touch.clientX - svgRect.left) / svgRect.width;
+            addToPan(relX < 0.5 ? 'left' : 'right', itemId);
+          }
+          ghost.remove();
+          ghost = null;
+          highlightDropSide(null);
+        }
+        isDragging = false;
+      });
+    }
+
+    /**
+     * ==========================================
+     * 5. 闖關小挑戰題庫設計 (共 7 關，循序漸進)
+     * ==========================================
+     */
+    const LEVELS = [
+      {
+        id: 1,
+        type: 'observe',
+        badge: '第 1 關：直接觀察',
+        question: '看一看天秤！左邊是「字典」，右邊是「250ML紙包飲料」，哪一樣比較重？',
+        hint: '小秘訣：往下沉的那一邊比較重喔！',
+        presetLeft: ['dictionary'],
+        presetRight: ['drinkbox'],
+        allowInteractiveScale: false,
+        showDesk: false,
+        options: [
+          { id: 'dictionary', label: '字典比較重', itemId: 'dictionary' },
+          { id: 'drinkbox', label: '250ML紙包飲料比較重', itemId: 'drinkbox' }
+        ],
+        correctAnswer: 'dictionary',
+        explanation: '答對了！左邊的「字典」往下沉，所以字典比 250ML紙包飲料重！'
+      },
+      {
+        id: 2,
+        type: 'observe',
+        badge: '第 2 關：直接觀察',
+        question: '天秤左邊放「水瓶」，右邊放「膠袋」，哪一樣比較輕？',
+        hint: '注意看題目問的是「比較輕」喔！往上翹的那一邊比較輕。',
+        presetLeft: ['bottle'],
+        presetRight: ['plasticbag'],
+        allowInteractiveScale: false,
+        showDesk: false,
+        options: [
+          { id: 'bottle', label: '水瓶比較輕', itemId: 'bottle' },
+          { id: 'plasticbag', label: '膠袋比較輕', itemId: 'plasticbag' }
+        ],
+        correctAnswer: 'plasticbag',
+        explanation: '太棒了！右邊的「膠袋」輕飄飄地往上翹，所以膠袋比較輕！'
+      },
+      {
+        id: 3,
+        type: 'predict',
+        badge: '第 3 關：動腦猜一猜',
+        question: '預測實驗：如果左邊放「250ML紙包飲料」，右邊放「水瓶」，哪一邊會往下沉？',
+        hint: '想一想日常生活中，250ML紙包飲料和裝滿水的水瓶哪一個比較重？',
+        presetLeft: [],
+        presetRight: [],
+        demoLeft: ['drinkbox'],
+        demoRight: ['bottle'],
+        allowInteractiveScale: false,
+        showDesk: false,
+        options: [
+          { id: 'left', label: '⬅️ 左邊（250ML紙包飲料）下沉', itemId: 'drinkbox' },
+          { id: 'right', label: '➡️ 右邊（水瓶）下沉', itemId: 'bottle' }
+        ],
+        correctAnswer: 'right',
+        explanation: '猜對了！天秤馬上驗證給你看：裝滿水的水瓶比 250ML紙包飲料重，所以右邊沉下去了！'
+      },
+      {
+        id: 4,
+        type: 'experiment',
+        badge: '第 4 關：動手秤一秤',
+        question: '請你親自把「字典」和「水瓶」放到天秤兩邊比一比，找出哪一樣最重？',
+        hint: '從下面木桌把「字典」放左邊、「水瓶」放右邊，再選出較重的物品！',
+        presetLeft: [],
+        presetRight: [],
+        allowInteractiveScale: true,
+        showDesk: true,
+        options: [
+          { id: 'dictionary', label: '字典最重', itemId: 'dictionary' },
+          { id: 'bottle', label: '水瓶最重', itemId: 'bottle' }
+        ],
+        correctAnswer: 'dictionary',
+        explanation: '好厲害！厚厚的字典比水瓶還要重！'
+      },
+      {
+        id: 5,
+        type: 'experiment',
+        badge: '第 5 關：動手秤一秤',
+        question: '請用天秤比較「250ML紙包飲料」和「膠袋」，哪一樣比較輕？',
+        hint: '把這兩樣物品分別放到天秤左右兩邊試試看吧！',
+        presetLeft: [],
+        presetRight: [],
+        allowInteractiveScale: true,
+        showDesk: true,
+        options: [
+          { id: 'drinkbox', label: '250ML紙包飲料比較輕', itemId: 'drinkbox' },
+          { id: 'plasticbag', label: '膠袋比較輕', itemId: 'plasticbag' }
+        ],
+        correctAnswer: 'plasticbag',
+        explanation: '完全正確！空膠袋非常輕，比 250ML紙包飲料輕得多！'
+      },
+      {
+        id: 6,
+        type: 'inference',
+        badge: '第 6 關：小偵探推理',
+        question: '已知「字典比水瓶重」，而且「水瓶比 250ML紙包飲料重」。這三樣物品中哪一樣最重？',
+        hint: '你也可以用下面的天秤再驗證一次喔！',
+        presetLeft: ['dictionary'],
+        presetRight: ['bottle'],
+        allowInteractiveScale: true,
+        showDesk: true,
+        options: [
+          { id: 'dictionary', label: '字典', itemId: 'dictionary' },
+          { id: 'bottle', label: '水瓶', itemId: 'bottle' },
+          { id: 'drinkbox', label: '250ML紙包飲料', itemId: 'drinkbox' }
+        ],
+        correctAnswer: 'dictionary',
+        explanation: '推理成功！字典 > 水瓶 > 250ML紙包飲料，所以「字典」最重！'
+      },
+      {
+        id: 7,
+        type: 'sort',
+        badge: '第 7 關：終極大挑戰',
+        question: '請按「由輕到重」的順序，依序點擊下面四樣指定物品！',
+        hint: '先點「最輕」的物品，最後點「最重」的物品！（也可以使用天秤幫忙測試）',
+        presetLeft: [],
+        presetRight: [],
+        allowInteractiveScale: true,
+        showDesk: true,
+        sortItems: ['dictionary', 'plasticbag', 'bottle', 'drinkbox'],
+        correctOrder: ['plasticbag', 'drinkbox', 'bottle', 'dictionary'],
+        explanation: '恭喜完成終極排序！由輕到重是：膠袋 ➡️ 250ML紙包飲料 ➡️ 水瓶 ➡️ 字典！'
+      }
+    ];
+
+    /**
+     * ==========================================
+     * 6. 模式切換與關卡邏輯控制
+     * ==========================================
+     */
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabExplore = document.getElementById('tab-explore');
+      const tabChallenge = document.getElementById('tab-challenge');
+      const challengePanel = document.getElementById('challenge-panel');
+      const deskArea = document.getElementById('desk-area');
+      const bannerActions = document.getElementById('banner-actions');
+      const bannerBadge = document.getElementById('banner-badge');
+      const mascotIcon = document.getElementById('mascot-icon');
+
+      if (mode === 'explore') {
+        tabExplore.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all bg-sky-500 text-white shadow';
+        tabChallenge.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all text-sky-800 hover:bg-sky-200';
+        challengePanel.classList.add('hidden');
+        deskArea.classList.remove('hidden');
+        mascotIcon.textContent = '🦉';
+        bannerBadge.textContent = '自由探索模式';
+        bannerBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-xs font-black bg-sky-100 text-sky-700 mb-1';
+        bannerActions.innerHTML = `
+          <button onclick="clearScale()"
+            class="px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-base shadow-md border-b-4 border-rose-700 transition flex items-center gap-1.5">
+            <span>🔄</span> 清空天秤
+          </button>
+        `;
+        clearScale();
+      } else {
+        tabChallenge.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all bg-amber-500 text-white shadow';
+        tabExplore.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-sm sm:text-base transition-all text-sky-800 hover:bg-sky-200';
+        challengePanel.classList.remove('hidden');
+        mascotIcon.textContent = '🦁';
+        loadLevel(currentLevelIdx);
+      }
+    }
+
+    function loadLevel(idx) {
+      currentLevelIdx = idx;
+      levelSolved = false;
+      sortSelection = [];
+
+      const level = LEVELS[idx];
+      const bannerBadge = document.getElementById('banner-badge');
+      const bannerTitle = document.getElementById('banner-title');
+      const bannerSubtitle = document.getElementById('banner-subtitle');
+      const bannerActions = document.getElementById('banner-actions');
+      const deskArea = document.getElementById('desk-area');
+      const feedbackEl = document.getElementById('challenge-feedback');
+
+      bannerBadge.textContent = level.badge;
+      bannerBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-800 mb-1';
+      bannerTitle.textContent = level.question;
+      bannerSubtitle.textContent = `💡 ${level.hint}`;
+      feedbackEl.classList.add('hidden');
+
+      // 顯示或隱藏底部物品桌
+      if (level.showDesk) {
+        deskArea.classList.remove('hidden');
+        bannerActions.innerHTML = `
+          <button onclick="resetCurrentLevelScale()"
+            class="px-3.5 py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-sm shadow transition">
+            🔄 重設天秤
+          </button>
+        `;
+      } else {
+        deskArea.classList.add('hidden');
+        bannerActions.innerHTML = '';
+      }
+
+      // 設定天秤初始物品
+      leftPan = [...level.presetLeft];
+      rightPan = [...level.presetRight];
+      updateScalePhysics(false);
+
+      // 更新關卡進度圓點
+      renderLevelProgress();
+
+      // 渲染作答區
+      if (level.type === 'sort') {
+        renderSortUI(level);
+      } else {
+        renderChoiceUI(level);
+      }
+    }
+
+    function resetCurrentLevelScale() {
+      const level = LEVELS[currentLevelIdx];
+      leftPan = [...level.presetLeft];
+      rightPan = [...level.presetRight];
+      playSound('remove');
+      updateScalePhysics(false);
+    }
+
+    function renderLevelProgress() {
+      const dotsEl = document.getElementById('level-dots');
+      const textEl = document.getElementById('level-progress-text');
+      textEl.textContent = `第 ${currentLevelIdx + 1} / ${LEVELS.length} 關`;
+
+      dotsEl.innerHTML = LEVELS.map((lvl, i) => {
+        if (i < currentLevelIdx) {
+          return `<span class="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs font-black flex items-center justify-center shadow-sm">✓</span>`;
+        } else if (i === currentLevelIdx) {
+          return `<span class="w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-black flex items-center justify-center ring-4 ring-amber-200 shadow">${i + 1}</span>`;
+        } else {
+          return `<span class="w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-black flex items-center justify-center">${i + 1}</span>`;
+        }
+      }).join('');
+    }
+
+    /**
+     * 渲染單選題按鈕介面
+     */
+    function renderChoiceUI(level) {
+      const area = document.getElementById('challenge-options-area');
+      const gridCols = level.options.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2';
+
+      area.innerHTML = `
+        <div class="grid ${gridCols} gap-3">
+          ${level.options.map(opt => {
+            const item = getItemById(opt.itemId);
+            return `
+              <button onclick="submitChoice('${opt.id}', this)"
+                class="choice-btn p-3 rounded-2xl bg-sky-50 hover:bg-sky-100 active:scale-95 border-3 border-sky-300 hover:border-sky-500 flex items-center gap-3 text-left shadow-sm transition-all">
+                <div class="w-12 h-12 flex-shrink-0">${item.svg}</div>
+                <span class="font-black text-base sm:text-lg text-slate-800">${opt.label}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function submitChoice(selectedId, btnEl) {
+      if (levelSolved) return;
+      const level = LEVELS[currentLevelIdx];
+      const feedbackEl = document.getElementById('challenge-feedback');
+
+      if (selectedId === level.correctAnswer) {
+        levelSolved = true;
+        playSound('correct');
+        addStar();
+        launchConfetti();
+
+        // 若是「預測題」，答對後立刻把物品放到天秤上動畫演示給學生看！
+        if (level.type === 'predict' && level.demoLeft && level.demoRight) {
+          leftPan = [...level.demoLeft];
+          rightPan = [...level.demoRight];
+          updateScalePhysics(false);
+        }
+
+        // 高亮正確按鈕
+        document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+        btnEl.className = 'choice-btn p-3 rounded-2xl bg-emerald-100 border-4 border-emerald-500 flex items-center gap-3 text-left shadow-md scale-[1.02]';
+
+        showSuccessFeedback(level.explanation);
+      } else {
+        playSound('wrong');
+        btnEl.className = 'choice-btn p-3 rounded-2xl bg-rose-100 border-3 border-rose-400 flex items-center gap-3 text-left opacity-75';
+        feedbackEl.className = 'mt-3 p-3 rounded-2xl text-center font-black text-base sm:text-lg bg-rose-100 text-rose-700 border-2 border-rose-300 animate-pop';
+        feedbackEl.innerHTML = '🤔 再想一想喔！看看天秤哪一邊往下沉（重）、哪一邊往上翹（輕）？';
+        feedbackEl.classList.remove('hidden');
+      }
+    }
+
+    /**
+     * 渲染第 7 關：由輕到重排序題介面
+     */
+    function renderSortUI(level) {
+      const area = document.getElementById('challenge-options-area');
+
+      area.innerHTML = `
+        <div class="flex flex-col gap-3">
+          <!-- 4個排序位置槽 (輕 -> 重) -->
+          <div class="bg-amber-50 p-3 rounded-2xl border-2 border-amber-200">
+            <div class="flex items-center justify-between text-xs sm:text-sm font-black text-amber-800 mb-2">
+              <span>🪶 最輕（第1名）</span>
+              <span>➡️ 越來越重 ➡️</span>
+              <span>🏋️ 最重（第4名）</span>
+            </div>
+            <div class="grid grid-cols-4 gap-2">
+              ${[0, 1, 2, 3].map(slotIdx => {
+                const chosenId = sortSelection[slotIdx];
+                const chosenItem = chosenId ? getItemById(chosenId) : null;
+                return `
+                  <div onclick="removeSortSlot(${slotIdx})"
+                    class="sort-slot h-20 sm:h-24 rounded-xl border-3 ${chosenItem ? 'bg-white border-sky-400 cursor-pointer shadow' : 'bg-white/60 border-dashed border-amber-400'} flex flex-col items-center justify-center p-1">
+                    ${chosenItem
+                      ? `<div class="w-10 h-10 sm:w-12 sm:h-12">${chosenItem.svg}</div>
+                         <span class="text-[11px] sm:text-xs font-black text-slate-800 truncate w-full text-center">${chosenItem.name}</span>`
+                      : `<span class="text-lg font-black text-amber-400">${slotIdx + 1}</span>`
+                    }
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- 待選物品按鈕列 -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            ${level.sortItems.map(itemId => {
+              const item = getItemById(itemId);
+              const isSelected = sortSelection.includes(itemId);
+              return `
+                <button onclick="selectSortItem('${itemId}')" ${isSelected || levelSolved ? 'disabled' : ''}
+                  class="p-2 rounded-xl border-2 flex items-center justify-center gap-2 font-black text-sm transition
+                  ${isSelected
+                    ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-50 cursor-not-allowed'
+                    : 'bg-sky-50 hover:bg-sky-100 active:scale-95 border-sky-300 text-slate-800 shadow-sm'}">
+                  <div class="w-8 h-8 flex-shrink-0">${item.svg}</div>
+                  <span>${item.name}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- 清除重排按鈕 -->
+          ${sortSelection.length > 0 && !levelSolved ? `
+            <div class="flex justify-end">
+              <button onclick="resetSortSelection()" class="text-xs sm:text-sm font-black text-rose-600 hover:underline">
+                ↩️ 重新選擇順序
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function selectSortItem(itemId) {
+      if (levelSolved || sortSelection.includes(itemId)) return;
+      if (sortSelection.length < 4) {
+        sortSelection.push(itemId);
+        playSound('place');
+        const level = LEVELS[currentLevelIdx];
+        renderSortUI(level);
+
+        if (sortSelection.length === 4) {
+          checkSortAnswer();
+        }
+      }
+    }
+
+    function removeSortSlot(slotIdx) {
+      if (levelSolved || !sortSelection[slotIdx]) return;
+      sortSelection.splice(slotIdx, 1);
+      playSound('remove');
+      renderSortUI(LEVELS[currentLevelIdx]);
+    }
+
+    function resetSortSelection() {
+      sortSelection = [];
+      playSound('remove');
+      renderSortUI(LEVELS[currentLevelIdx]);
+      document.getElementById('challenge-feedback').classList.add('hidden');
+    }
+
+    function checkSortAnswer() {
+      const level = LEVELS[currentLevelIdx];
+      const isCorrect = sortSelection.every((id, i) => id === level.correctOrder[i]);
+      const feedbackEl = document.getElementById('challenge-feedback');
+
+      if (isCorrect) {
+        levelSolved = true;
+        playSound('correct');
+        addStar();
+        launchConfetti();
+        renderSortUI(level);
+        showSuccessFeedback(level.explanation);
+      } else {
+        playSound('wrong');
+        feedbackEl.className = 'mt-3 p-3 rounded-2xl text-center font-black text-base bg-rose-100 text-rose-700 border-2 border-rose-300 animate-pop';
+        feedbackEl.innerHTML = `
+          <div>😅 順序還差一點點喔！最輕的是「膠袋」，最重的是「字典」，再試一次吧！</div>
+          <button onclick="resetSortSelection()" class="mt-2 px-4 py-1.5 rounded-xl bg-rose-500 text-white text-sm font-black shadow">
+            🔄 重新排列
+          </button>
+        `;
+        feedbackEl.classList.remove('hidden');
+      }
+    }
+
+    /**
+     * 顯示答對鼓勵訊息與「下一關」按鈕
+     */
+    function showSuccessFeedback(explanation) {
+      const feedbackEl = document.getElementById('challenge-feedback');
+      const isLastLevel = currentLevelIdx === LEVELS.length - 1;
+
+      feedbackEl.className = 'mt-3 p-3.5 rounded-2xl text-center font-black text-base sm:text-lg bg-emerald-100 text-emerald-800 border-3 border-emerald-400 animate-pop flex flex-col sm:flex-row items-center justify-between gap-3';
+      feedbackEl.innerHTML = `
+        <div class="text-left flex items-center gap-2">
+          <span class="text-2xl">🌟</span>
+          <span>${explanation}</span>
+        </div>
+        <button onclick="${isLastLevel ? 'showVictoryModal()' : 'nextLevel()'}"
+          class="px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-base shadow-md border-b-4 border-emerald-700 whitespace-nowrap flex-shrink-0">
+          ${isLastLevel ? '🏆 查看總成績' : '下一關 ➡️'}
+        </button>
+      `;
+      feedbackEl.classList.remove('hidden');
+    }
+
+    function nextLevel() {
+      if (currentLevelIdx + 1 < LEVELS.length) {
+        loadLevel(currentLevelIdx + 1);
+      }
+    }
+
+    function addStar() {
+      stars += 1;
+      const starEl = document.getElementById('star-count');
+      starEl.textContent = stars;
+      starEl.parentElement.classList.remove('animate-pop');
+      void starEl.parentElement.offsetWidth;
+      starEl.parentElement.classList.add('animate-pop');
+    }
+
+    function showVictoryModal() {
+      playSound('correct');
+      launchConfetti();
+      document.getElementById('final-stars').textContent = `⭐ ${stars} 顆星`;
+      document.getElementById('victory-modal').classList.remove('hidden');
+    }
+
+    function restartChallenge() {
+      document.getElementById('victory-modal').classList.add('hidden');
+      currentLevelIdx = 0;
+      loadLevel(0);
+    }
+
+    function closeVictoryAndExplore() {
+      document.getElementById('victory-modal').classList.add('hidden');
+      switchMode('explore');
+    }
+
+    /**
+     * 慶祝彩帶動畫特效
+     */
+    function launchConfetti() {
+      const colors = ['#F43F5E', '#F59E0B', '#10B981', '#3B82F6', '#A855F7', '#FACC15'];
+      for (let i = 0; i < 36; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = `${Math.random() * 100}vw`;
+        piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDelay = `${Math.random() * 0.4}s`;
+        piece.style.width = `${8 + Math.random() * 8}px`;
+        piece.style.height = `${8 + Math.random() * 8}px`;
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 2800);
+      }
+    }
+
+    /**
+     * ==========================================
+     * 7. 頁面載入初始化
+     * ==========================================
+     */
+    window.onload = function () {
+      renderDeskItems();
+      setupScaleDropZones();
+      updateScalePhysics(false);
+    };
+  </script>
+</body>
+</html>
